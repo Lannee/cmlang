@@ -1,1 +1,9 @@
-|x| x <- 3
+let fib = 
+    let prv_fib = 1
+
+until fib <? 1000000000 
+    print <- begin
+        let sum = fib + prv_fib
+        prv_fib = fib
+        fib = sum
+    end - prv_fib

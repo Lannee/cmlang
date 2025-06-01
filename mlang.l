@@ -12,21 +12,20 @@
 
 %}
 
-ALPHA    [A-Za-z]
+ALPHA    [A-Za-z_]
 DIGIT    [0-9]
 
 %%
 "//".*          ; /* ignore single-line comment */
 [ \t\n]	        ;
-{DIGIT}+		{ yylval.int_val = atoi(yytext); return INT; }
+-*{DIGIT}+		{ yylval.int_val = atoi(yytext); return INT; }
 \"[^\"\n]*\"	{	// remove the quote marks from either end
 					yylval.str_val = (char *)malloc(sizeof(char)*strlen(yytext)-1);
 					strncpy(yylval.str_val, yytext+1, strlen(yytext)-2);
 					yylval.str_val[strlen(yytext)-2] = '\0';	// terminate the string!
 					return STRING;
 				}
-\<- 			{ return LARROW; }
-\|	 			{ return SEMICOL; }
+:	 			{ return ARG_PASS; }
 print           { return PRINT; }
 toint           { return TOINT; }
 tostr           { return TOSTR; }
@@ -45,6 +44,10 @@ until 			{ return UNTIL; }
 \>\=\?			{ return GREATEREQUAL; }
 \!\=\?			{ return NOTEQUAL; }
 \=\?			{ return EQUAL; }
+\+			    { return PLUS; }
+-			    { return MINUS; }
+\*			    { return MULTIPLY; }
+\/			    { return DIVIDE; }
 
 \=				{ return ASSIGNMENT; }
 T               { return UNIT; }

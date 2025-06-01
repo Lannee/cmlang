@@ -11,25 +11,28 @@
 
 namespace mlang {
 
+class type;
+class unit_type;
+class integer_type;
+
 static inline void __error(std::string_view message) 
     { std::cerr << "Error: " << message << std::endl; exit(1); }
 
 static inline void __warning(std::string_view message) 
     { std::cerr << "Warning: " << message << std::endl; } 
 
-class type;
-class unit_type;
-class integer_type;
-class expression;
-
 class context {
 public:
 
     context() : variables_(0) {}
 
-    void set_local_variable(std::string_view name, const expression* value);
+    void set_global_variable(std::string_view name, const type* value);
 
-    const expression *get_variable(std::string_view name);
+    void set_local_variable(std::string_view name, const type* value);
+
+    void assign_to_variable(std::string_view name, const type* value);
+
+    const type *get_variable(std::string_view name);
 
     inline void new_scope();
     inline void pop_scope();
@@ -39,85 +42,108 @@ public:
     // ~context();
 
 private:
-    std::list<std::unordered_map<std::string, const expression *>> variables_;
+    std::list<std::unordered_map<std::string, const type *>> variables_;
 };
 
 class expression {
 public:
-    expression() : args_names_(new std::vector<std::string>(0)) {}
-
-    virtual const expression *value(context &ctx) const = 0;
-
-    const type *as_type() const { return (const type *)this; }
-
-    void set_args_names(std::vector<std::string> *names) { args_names_ = names; }
-    
-    std::size_t num_args() const { return args_names_->size(); }
-    std::vector<std::string> *args_names() const { return args_names_; }
+    virtual const type *value(context &ctx) const = 0;
     virtual ~expression() {}
-private:
-    std::vector<std::string> *args_names_;
 };
 
 enum type_kind {
     UNIT,
     INTEGER,
-    STRING,
-    FUNCTION,
-    STRUCT
+    STRING
 };
 
+std::string type_kind_to_string(type_kind kind);
+
 class type : public expression {
-public:   
+public:
     virtual type_kind kind() const = 0;
     virtual std::string repr() const = 0;
     virtual integer_type to_integer_type() const = 0;
+
+    virtual type *operator+ (type const &obj) const = 0;
+    virtual type *operator- (type const &obj) const = 0;
+    virtual type *operator* (type const &obj) const = 0;
+    virtual type *operator/ (type const &obj) const = 0;
+    virtual type *operator> (type const &obj) const = 0;
+    virtual type *operator< (type const &obj) const = 0;
+    virtual type *operator>=(type const &obj) const = 0;
+    virtual type *operator<=(type const &obj) const = 0;
+    virtual type *operator==(type const &obj) const = 0;
+    virtual type *operator!=(type const &obj) const = 0;
 };
 
 class integer_type : public type {
 public:
 
-    integer_type(uint32_t data) : data_(data) {}
+    integer_type(int64_t data) : data_(data) {}
 
     type_kind kind() const { return type_kind::INTEGER; };
+
+    const type *value(context &_) const { return this; }
 
     std::string repr() const { return std::to_string(data_); }  
     integer_type to_integer_type() const override { return *this; }
 
-    const expression *value(context &_) const override { return this; }
+    int64_t data__() const { return data_; }
 
-    uint32_t data__() const { return data_; }
+    type *operator+ (type const &obj) const { return new integer_type(data_ + dynamic_cast<const integer_type &>(obj).data_); }
+    type *operator- (type const &obj) const { return new integer_type(data_ - dynamic_cast<const integer_type &>(obj).data_); }
+    type *operator* (type const &obj) const { return new integer_type(data_ * dynamic_cast<const integer_type &>(obj).data_); }
+    type *operator/ (type const &obj) const { return new integer_type(data_ / dynamic_cast<const integer_type &>(obj).data_); }
+    type *operator> (type const &obj) const { return new integer_type(data_ > dynamic_cast<const integer_type &>(obj).data_); }
+    type *operator< (type const &obj) const { return new integer_type(data_ < dynamic_cast<const integer_type &>(obj).data_); }
+    type *operator>=(type const &obj) const { return new integer_type(data_ >= dynamic_cast<const integer_type &>(obj).data_); }
+    type *operator<=(type const &obj) const { return new integer_type(data_ <= dynamic_cast<const integer_type &>(obj).data_); }
+    type *operator==(type const &obj) const { return new integer_type(data_ == dynamic_cast<const integer_type &>(obj).data_); }
+    type *operator!=(type const &obj) const { return new integer_type(data_ != dynamic_cast<const integer_type &>(obj).data_); }
 private:
-    uint32_t data_;
+    int64_t data_;
 };
 
 class unit_type : public type {
 public:
     type_kind kind() const { return type_kind::UNIT; };
+    const type *value(context &_) const { return this; }
     std::string repr() const { return "T"; } 
-    integer_type to_integer_type() const override { return 0; } 
+    integer_type to_integer_type() const override { return 0; }
 
-    const expression *value(context &_) const override { return this; }
+    type *operator+ (type const &obj) const { unsupported_operation(); }
+    type *operator- (type const &obj) const { unsupported_operation(); }
+    type *operator* (type const &obj) const { unsupported_operation(); }
+    type *operator/ (type const &obj) const { unsupported_operation(); }
+    type *operator> (type const &obj) const { unsupported_operation(); }
+    type *operator< (type const &obj) const { unsupported_operation(); }
+    type *operator>=(type const &obj) const { unsupported_operation(); }
+    type *operator<=(type const &obj) const { unsupported_operation(); }
+    type *operator==(type const &obj) const { unsupported_operation(); }
+    type *operator!=(type const &obj) const { unsupported_operation(); }
+
+private:
+    void unsupported_operation() const { __error("Unsupported operation for unit type"); }
+
 };
 
 const unit_type UNIT__{};
 
 class statement : public expression {
 public:
-    statement() : expression() {}
-
-    const expression *value(context &ctx) const { execute(ctx); return &UNIT__; }
+    const type *value(context &ctx) const { execute(ctx); return &UNIT__; }
     virtual void execute(context &ctx) const = 0;
 };
 
 class print_function : public expression {
 public:
-    print_function(const std::vector<expression *> *exprs) : exprs_(exprs) {}
-    const expression *value(context &ctx) const;
+    print_function(const std::vector<const expression *> *exprs) : exprs_(exprs) {}
+    const type *value(context &ctx) const;
     ~print_function();
 
 private:
-    const std::vector<expression *> *exprs_;
+    const std::vector<const expression *> *exprs_;
 };
 
 class until_statement : public statement {
@@ -135,7 +161,7 @@ private:
 class if_expression : public expression {
 public:
     if_expression(const expression *cond, const expression *then, const expression *otherwise) : cond_(cond), then_(then), otherwise_(otherwise) {}
-    const expression *value(context &ctx) const;
+    const type *value(context &ctx) const;
     ~if_expression();
 
 private:
@@ -151,72 +177,111 @@ public:
 
     type_kind kind() const { return type_kind::STRING; };
 
+    const type *value(context &_) const { return this; }
+
     std::string repr() const { return data_; } 
     integer_type to_integer_type() const override { return data_ != ""; }  
 
-    string_type operator+(string_type const& obj) { return string_type(data_ + obj.data_); }
+    
+    type *operator+ (type const &obj) const { return new string_type(data_ + dynamic_cast<const string_type &>(obj).data_); }
+    type *operator- (type const &obj) const { unsupported_operation(); }
+    type *operator* (type const &obj) const { unsupported_operation(); }
+    type *operator/ (type const &obj) const { unsupported_operation(); }
+    type *operator> (type const &obj) const { return new integer_type(data_ > dynamic_cast<const string_type &>(obj).data_); }
+    type *operator< (type const &obj) const { return new integer_type(data_ < dynamic_cast<const string_type &>(obj).data_); }
+    type *operator>=(type const &obj) const { return new integer_type(data_ >= dynamic_cast<const string_type &>(obj).data_); }
+    type *operator<=(type const &obj) const { return new integer_type(data_ <= dynamic_cast<const string_type &>(obj).data_); }
+    type *operator==(type const &obj) const { return new integer_type(data_ == dynamic_cast<const string_type &>(obj).data_); }
+    type *operator!=(type const &obj) const { return new integer_type(data_ != dynamic_cast<const string_type &>(obj).data_); }
+    
+private:
+    void unsupported_operation() const { __error("Unsupported operation for string type"); }
 
-    const expression *value(context &_) const override { return this; }
 private:
     std::string data_;
 };
 
 class expr_list : public expression {
 public:
-    expr_list(std::vector<expression *> *exprs) : exprs_(exprs) {}
+    expr_list(std::vector<const expression *> *exprs) : exprs_(exprs) {}
 
-    const expression *value(context &ctx) const;
+    const type *value(context &ctx) const;
 
 private:
-    const std::vector<expression *> *exprs_;
+    const std::vector<const expression *> *exprs_;
 };
 
-class function_decl : public expression {
+class var_decl : public expression {
 public:
-    function_decl(std::string_view name, 
-                  const expression *expr)
-        : var_name_(name), expr_(expr) {}
+    var_decl(std::string_view name, const expression *expr) : var_name_(name), expr_(expr) { }
 
-    const expression *value(context &ctx) const;
+    const type *value(context &ctx) const;
 
-    ~function_decl();                                            
+    ~var_decl();                                            
 
 private:
     const std::string var_name_;
     const expression *expr_;
 };
 
+class essignment_expression : public expression {
+public:
+    essignment_expression(std::string_view name, const expression *expr) : var_name_(name), expr_(expr) { }
 
-enum comp_kind {
+    const type *value(context &ctx) const;
+
+    ~essignment_expression();                                            
+
+private:
+    const std::string var_name_;
+    const expression *expr_;
+};
+
+class variable : public expression {
+public:
+    variable(std::string_view name) : name_(name) {}
+    const type *value(context &ctx) const;
+
+private:
+    const std::string name_;
+};
+
+
+enum builtin_binop_kind {
     EQUAL,
     NOTEQUAL,
     GREATER,
     GREATEREQUAL,
     LESS,
-    LESSEQUAL
+    LESSEQUAL,
+    PLUS,
+    MINUS,
+    MULTIPLY,
+    DIVIDE
 };
 
-class comp_expression : public expression {
+std::string builtin_binop_kind_to_string(builtin_binop_kind kind);
+
+
+class builtin_binop_function : public expression {
 public:
-    comp_expression(const expression *l, comp_kind op, const expression *r) : l_(l), op_(op), r_(r) {}
-    const expression *value(context &ctx) const;
+    builtin_binop_function(builtin_binop_kind op, const expression *fst, const expression *snd) : op_(op), fst_(fst), snd_(snd) {}
+    const type *value(context &ctx) const;
 private:
-    const expression *r_;
-    comp_kind op_;
-    const expression *l_;
+    builtin_binop_kind op_;
+    const expression *fst_;
+    const expression *snd_;
 };
 
 class function_call : public expression {
 public:
-    function_call(std::string_view name, const std::vector<expression *> *args) : name_(name), args_(args) {}
-    function_call(const expression *expr, const std::vector<expression *> *args) : name_(std::nullopt), expr_(expr), args_(args) {}
-    const expression *value(context &ctx) const;
+    function_call(std::string_view name, const std::vector<const expression *> *args) : name_(name), args_(args) {}
+    const type *value(context &ctx) const;
     ~function_call();
 
 private:
-    const std::optional<std::string> name_; 
-    const expression *expr_;
-    const std::vector<expression *> *args_;
+    const std::string name_; 
+    const std::vector<const expression *> *args_;
 };
 
 
